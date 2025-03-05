@@ -5,23 +5,52 @@
     <title>Isometric Grid with Phaser</title>
     <!-- Load Phaser from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
 </head>
 <body>
     <script>
         // Phaser game configuration
         const config = {
             type: Phaser.AUTO,          // Automatically choose WebGL or Canvas
-            width: 1440,                 // Canvas width
+            width: 1440,                // Canvas width
             height: 768,                // Canvas height
             backgroundColor: '#00ff00', // Vibrant green background like the grassy field
             scene: {
                 preload: preload,       // Preload function for assets
-                create: create          // Create function for grid and tiles
+                create: create,         // Create function for grid and tiles
+                update: update          // Update function for controls
+            },
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    debug: false
+                }
             }
         };
 
         // Initialize the game
         const game = new Phaser.Game(config);
+
+        // Global variables for controls
+        let cursors;
+        let controlConfig = {
+            camera: null,
+            zoomIn: null,
+            zoomOut: null,
+            dragSpeed: 1,
+            zoomSpeed: 0.05,
+            minZoom: 0.5,
+            maxZoom: 2
+        };
 
         // Preload function (for loading tile assets later)
         function preload() {
@@ -52,8 +81,12 @@
             const offsetX = ( gridWidthPx) / 4 + tileWidth/2;
             const offsetY = (this.sys.game.config.height - gridHeightPx) / 2;
 
+            // Create a container for all game objects to enable group scrolling
+            this.gameContainer = this.add.container(0, 0);
+
             // Create graphics object for drawing grid lines
             const graphics = this.add.graphics();
+            this.gameContainer.add(graphics);
             graphics.lineStyle(1, 0x000000, 1); // Black lines, 1px thick
 
             // // Draw vertical grid lines (constant gridX)
@@ -80,23 +113,94 @@
             const scale = desiredWidth / (originalWidth - 200);
 
             // Function to place tiles at grid coordinates
-            function placeTile(gridX, gridY, tileKey) {
+            const placeTile = (gridX, gridY, tileKey) => {
                 const screenX = (gridX - gridY) * (tileWidth / 2) + offsetX;
                 const screenY = (gridX + gridY) * (tileHeight / 2) + offsetY;
-                return this.add.image(screenX, screenY, tileKey)
+                const tile = this.add.image(screenX, screenY, tileKey)
                     .setScale(scale);
-            }
+                this.gameContainer.add(tile);
+                return tile;
+            };
             
-            // Use the private function to place tiles
-            placeTile.call(this, 1, 1, 'tile0');
-            placeTile.call(this, 1, 2, 'tile1');
-            placeTile.call(this, 2, 1, 'tile2');
-            placeTile.call(this, 2, 2, 'tile3');
-            placeTile.call(this, 3, 1, 'tile4');
-            placeTile.call(this, 3, 2, 'tile5');
-            placeTile.call(this, 3, 3, 'tile6');
-            placeTile.call(this, 2, 3, 'tile7');
-            placeTile.call(this, 1, 3, 'tile8');
+            // Place tiles
+            placeTile(1, 1, 'tile0');
+            placeTile(1, 2, 'tile1');
+            placeTile(2, 1, 'tile2');
+            placeTile(2, 2, 'tile3');
+            placeTile(3, 1, 'tile4');
+            placeTile(3, 2, 'tile5');
+            placeTile(3, 3, 'tile6');
+            placeTile(2, 3, 'tile7');
+            placeTile(1, 3, 'tile8');
+
+            // Set up camera controls
+            controlConfig.camera = this.cameras.main;
+            
+            // Set camera bounds (adjust these values based on your grid size)
+            const worldWidth = gridWidthPx * 2;
+            const worldHeight = gridHeightPx * 2;
+            this.cameras.main.setBounds(-worldWidth/2, -worldHeight/2, worldWidth, worldHeight);
+            
+            // Center the camera on the grid initially
+            this.cameras.main.centerOn(offsetX, offsetY);
+
+            // Set up keyboard controls
+            cursors = this.input.keyboard.createCursorKeys();
+            controlConfig.zoomIn = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
+            controlConfig.zoomOut = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+
+            // Enable mouse/touch drag for camera movement
+            this.input.on('pointermove', function (pointer) {
+                if (pointer.isDown) {
+                    this.cameras.main.scrollX -= (pointer.x - pointer.prevPosition.x) / this.cameras.main.zoom;
+                    this.cameras.main.scrollY -= (pointer.y - pointer.prevPosition.y) / this.cameras.main.zoom;
+                }
+            }, this);
+
+            // Enable mouse wheel zoom
+            this.input.on('wheel', function (pointer, gameObjects, deltaX, deltaY, deltaZ) {
+                const zoom = this.cameras.main.zoom;
+                if (deltaY > 0) {
+                    // Zoom out
+                    this.cameras.main.zoom = Math.max(controlConfig.minZoom, zoom - controlConfig.zoomSpeed);
+                } else {
+                    // Zoom in
+                    this.cameras.main.zoom = Math.min(controlConfig.maxZoom, zoom + controlConfig.zoomSpeed);
+                }
+            }, this);
+
+            // Add instructions text
+            this.add.text(10, 10, 'Arrow Keys: Move | Q/E: Zoom | Mouse Drag: Pan | Mouse Wheel: Zoom', {
+                font: '16px Arial',
+                fill: '#000000',
+                backgroundColor: '#ffffff'
+            }).setScrollFactor(0).setDepth(100);
+        }
+
+        // Update function for controls
+        function update() {
+            // Keyboard camera movement
+            const camera = controlConfig.camera;
+            const speed = 10;
+
+            if (cursors.left.isDown) {
+                camera.scrollX -= speed / camera.zoom;
+            } else if (cursors.right.isDown) {
+                camera.scrollX += speed / camera.zoom;
+            }
+
+            if (cursors.up.isDown) {
+                camera.scrollY -= speed / camera.zoom;
+            } else if (cursors.down.isDown) {
+                camera.scrollY += speed / camera.zoom;
+            }
+
+            // Keyboard zoom controls
+            if (controlConfig.zoomIn.isDown) {
+                camera.zoom = Math.min(controlConfig.maxZoom, camera.zoom + controlConfig.zoomSpeed);
+            } else if (controlConfig.zoomOut.isDown) {
+                camera.zoom = Math.max(controlConfig.minZoom, camera.zoom - controlConfig.zoomSpeed);
+            }
         }
     </script>
 </body>
