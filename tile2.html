@@ -11,7 +11,7 @@
         // Phaser game configuration
         const config = {
             type: Phaser.AUTO,          // Automatically choose WebGL or Canvas
-            width: 1024,                 // Canvas width
+            width: 1440,                 // Canvas width
             height: 768,                // Canvas height
             backgroundColor: '#00ff00', // Vibrant green background like the grassy field
             scene: {
@@ -38,69 +38,66 @@
         }
 
         // Create function to draw the grid and prepare for tiles
-		function create() {
-    // Grid parameters
-    const tileWidth = 200;      // Desired screen width of each tile
-    const tileHeight = tileWidth / 2;      // Desired screen height of each tile
-    const gridSize = 4;         // 5x5 grid
-    const offsetX = 200;        // Horizontal offset
+        function create() {
+            // Grid parameters
+            const tileWidth = 412;      // Desired screen width of each tile
+            const tileHeight = tileWidth / 2;      // Desired screen height of each tile
+            const gridSize = 4;         // 4x4 grid
+            
+            // Calculate the total width and height of the isometric grid
+            const gridWidthPx = gridSize * tileWidth;
+            const gridHeightPx = gridSize * tileHeight;
+            
+            // Calculate center offsets based on canvas dimensions
+            const offsetX = ( gridWidthPx) / 4 + tileWidth/2;
+            const offsetY = (this.sys.game.config.height - gridHeightPx) / 2;
 
-    // Create graphics object for drawing grid lines
-    const graphics = this.add.graphics();
-    graphics.lineStyle(1, 0x000000, 1); // Black lines, 1px thick
+            // Create graphics object for drawing grid lines
+            const graphics = this.add.graphics();
+            graphics.lineStyle(1, 0x000000, 1); // Black lines, 1px thick
 
-    // Draw vertical grid lines (constant gridX)
-    for (let gridX = 0; gridX <= gridSize; gridX++) {
-        const x1 = (gridX - 0) * (tileWidth / 2) + offsetX;
-        const y1 = (gridX + 0) * (tileHeight / 2);
-        const x2 = (gridX - (gridSize - 1)) * (tileWidth / 2) + offsetX;
-        const y2 = (gridX + (gridSize - 1)) * (tileHeight / 2);
-        graphics.lineBetween(x1, y1, x2, y2);
-    }
+            // // Draw vertical grid lines (constant gridX)
+            // for (let gridX = 0; gridX <= gridSize; gridX++) {
+            //     const x1 = (gridX - 0) * (tileWidth / 2) + offsetX;
+            //     const y1 = (gridX + 0) * (tileHeight / 2) + offsetY;
+            //     const x2 = (gridX - (gridSize - 1)) * (tileWidth / 2) + offsetX;
+            //     const y2 = (gridX + (gridSize - 1)) * (tileHeight / 2) + offsetY;
+            //     graphics.lineBetween(x1, y1, x2, y2);
+            // }
 
-    // Draw horizontal grid lines (constant gridY)
-    for (let gridY = 0; gridY <= gridSize; gridY++) {
-        const x1 = (0 - gridY) * (tileWidth / 2) + offsetX;
-        const y1 = (0 + gridY) * (tileHeight / 2);
-        const x2 = ((gridSize - 1) - gridY) * (tileWidth / 2) + offsetX;
-        const y2 = ((gridSize - 1) + gridY) * (tileHeight / 2);
-        graphics.lineBetween(x1, y1, x2, y2);
-    }
+            // // Draw horizontal grid lines (constant gridY)
+            // for (let gridY = 0; gridY <= gridSize; gridY++) {
+            //     const x1 = (0 - gridY) * (tileWidth / 2) + offsetX;
+            //     const y1 = (0 + gridY) * (tileHeight / 2) + offsetY;
+            //     const x2 = ((gridSize - 1) - gridY) * (tileWidth / 2) + offsetX;
+            //     const y2 = ((gridSize - 1) + gridY) * (tileHeight / 2) + offsetY;
+            //     graphics.lineBetween(x1, y1, x2, y2);
+            // }
 
-    // Calculate scale factor (assuming all tiles have the same original size)
-    const desiredWidth = tileWidth;
-    const originalWidth = this.textures.get('tile0').source[0].width;
-    const scale = desiredWidth / ( originalWidth - 200 );
+            // Calculate scale factor (assuming all tiles have the same original size)
+            const desiredWidth = tileWidth;
+            const originalWidth = this.textures.get('tile0').source[0].width;
+            const scale = desiredWidth / (originalWidth - 200);
 
-    // // Place a tile at grid position (2, 2) as an example
-    // const gridX = 2;
-    // const gridY = 2;
-
-    // const screenX = (gridX - gridY) * (tileWidth / 2) + 150;
-    // const screenY = (gridX + gridY) * (tileHeight / 2);
-    // this.add.image(screenX, screenY, 'tile0')
-    //     .setScale(scale)
-    //     //.setOrigin(0.5, 0.5); // Center the tile in the grid cell
-
-    function placeTile(gridX, gridY, tileKey) {
-        const screenX = (gridX - gridY) * (tileWidth / 2) + 100;
-        const screenY = (gridX + gridY) * (tileHeight / 2);
-        return this.add.image(screenX, screenY, tileKey)
-            .setScale(scale);
-    }
-    
-    // Use the private function
-    placeTile.call(this, 1,1, 'tile0');
-    placeTile.call(this, 1, 2, 'tile1');
-	placeTile.call(this, 2, 1, 'tile2');
-	placeTile.call(this, 2, 2, 'tile3');
-	placeTile.call(this, 3, 1, 'tile4');
-	placeTile.call(this, 3, 2, 'tile5');
-	placeTile.call(this, 3, 3, 'tile6');
-	placeTile.call(this, 2, 3, 'tile7');
-	placeTile.call(this, 1, 3, 'tile8');
-	
-}
+            // Function to place tiles at grid coordinates
+            function placeTile(gridX, gridY, tileKey) {
+                const screenX = (gridX - gridY) * (tileWidth / 2) + offsetX;
+                const screenY = (gridX + gridY) * (tileHeight / 2) + offsetY;
+                return this.add.image(screenX, screenY, tileKey)
+                    .setScale(scale);
+            }
+            
+            // Use the private function to place tiles
+            placeTile.call(this, 1, 1, 'tile0');
+            placeTile.call(this, 1, 2, 'tile1');
+            placeTile.call(this, 2, 1, 'tile2');
+            placeTile.call(this, 2, 2, 'tile3');
+            placeTile.call(this, 3, 1, 'tile4');
+            placeTile.call(this, 3, 2, 'tile5');
+            placeTile.call(this, 3, 3, 'tile6');
+            placeTile.call(this, 2, 3, 'tile7');
+            placeTile.call(this, 1, 3, 'tile8');
+        }
     </script>
 </body>
 </html>
