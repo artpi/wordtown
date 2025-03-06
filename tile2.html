@@ -52,6 +52,13 @@
             maxZoom: 2
         };
 
+        // Variables for click vs. drag detection
+        let clickStartTime = 0;
+        let clickStartPosition = { x: 0, y: 0 };
+        let isDragging = false;
+        const DRAG_THRESHOLD = 5; // Pixels of movement to consider as dragging
+        const CLICK_DELAY = 200; // Milliseconds to wait before considering a click
+
         // Preload function (for loading tile assets later)
         function preload() {
             // Example: Load your output tiles here when ready
@@ -112,12 +119,87 @@
             const originalWidth = this.textures.get('tile0').source[0].width;
             const scale = desiredWidth / (originalWidth - 200);
 
+            // Create a text object for displaying tile names on hover
+            const tileNameText = this.add.text(0, 0, '', {
+                font: '24px Arial',
+                fill: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 4,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                padding: {
+                    x: 10,
+                    y: 5
+                }
+            });
+            tileNameText.setDepth(200);
+            tileNameText.setVisible(false);
+            tileNameText.setScrollFactor(0); // Fix to camera
+
+            // Store camera reference
+            const camera = this.cameras.main;
+            controlConfig.camera = camera;
+
             // Function to place tiles at grid coordinates
             const placeTile = (gridX, gridY, tileKey) => {
                 const screenX = (gridX - gridY) * (tileWidth / 2) + offsetX;
                 const screenY = (gridX + gridY) * (tileHeight / 2) + offsetY;
                 const tile = this.add.image(screenX, screenY, tileKey)
-                    .setScale(scale);
+                    .setScale(scale)
+                    .setInteractive(); // Make tile interactive for hover events
+                
+                // Store the original tile key for display
+                tile.name = tileKey;
+                
+                // Add hover effects
+                tile.on('pointerover', function() {
+                    // Apply blur effect by changing alpha and tint
+                    this.setAlpha(0.7);
+                    this.setTint(0xaaaaaa);
+                    
+                    // Show tile name
+                    tileNameText.setText(this.name);
+                    tileNameText.setPosition(
+                        this.x - tileNameText.width / 2,
+                        this.y - 50
+                    );
+                    tileNameText.setVisible(true);
+                    
+                    // Change cursor to pointer to indicate clickable
+                    document.body.style.cursor = 'pointer';
+                });
+                
+                tile.on('pointermove', function(pointer) {
+                    // Update text position to follow mouse
+                    tileNameText.setPosition(
+                        pointer.x,
+                        pointer.y - 50
+                    );
+                });
+                
+                tile.on('pointerout', function() {
+                    // Remove blur effect
+                    this.clearTint();
+                    this.setAlpha(1);
+                    
+                    // Hide tile name
+                    tileNameText.setVisible(false);
+                    
+                    // Reset cursor
+                    document.body.style.cursor = 'default';
+                });
+                
+                // Store tile reference for click handling
+                tile.on('pointerdown', function(pointer) {
+                    // Store the starting position and time for click vs. drag detection
+                    clickStartTime = Date.now();
+                    clickStartPosition.x = pointer.x;
+                    clickStartPosition.y = pointer.y;
+                    isDragging = false;
+                    
+                    // Store the tile that was clicked on
+                    this.scene.clickedTile = this;
+                });
+                
                 this.gameContainer.add(tile);
                 return tile;
             };
@@ -133,16 +215,13 @@
             placeTile(2, 3, 'tile7');
             placeTile(1, 3, 'tile8');
 
-            // Set up camera controls
-            controlConfig.camera = this.cameras.main;
-            
             // Set camera bounds (adjust these values based on your grid size)
             const worldWidth = gridWidthPx * 2;
             const worldHeight = gridHeightPx * 2;
-            this.cameras.main.setBounds(-worldWidth/2, -worldHeight/2, worldWidth, worldHeight);
+            camera.setBounds(-worldWidth/2, -worldHeight/2, worldWidth, worldHeight);
             
             // Center the camera on the grid initially
-            this.cameras.main.centerOn(offsetX, offsetY);
+            camera.centerOn(offsetX, offsetY);
 
             // Set up keyboard controls
             cursors = this.input.keyboard.createCursorKeys();
@@ -152,25 +231,56 @@
             // Enable mouse/touch drag for camera movement
             this.input.on('pointermove', function (pointer) {
                 if (pointer.isDown) {
-                    this.cameras.main.scrollX -= (pointer.x - pointer.prevPosition.x) / this.cameras.main.zoom;
-                    this.cameras.main.scrollY -= (pointer.y - pointer.prevPosition.y) / this.cameras.main.zoom;
+                    // Calculate distance moved
+                    const dx = pointer.x - clickStartPosition.x;
+                    const dy = pointer.y - clickStartPosition.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // If moved more than threshold, consider it a drag
+                    if (distance > DRAG_THRESHOLD) {
+                        isDragging = true;
+                    }
+                    
+                    // Move the camera
+                    camera.scrollX -= (pointer.x - pointer.prevPosition.x) / camera.zoom;
+                    camera.scrollY -= (pointer.y - pointer.prevPosition.y) / camera.zoom;
                 }
+            }, this);
+            
+            // Handle pointer up to detect clicks vs. drags
+            this.input.on('pointerup', function (pointer) {
+                // Only process as a click if:
+                // 1. We have a clicked tile
+                // 2. We're not dragging
+                // 3. The click duration is short enough
+                const clickDuration = Date.now() - clickStartTime;
+                
+                if (this.clickedTile && !isDragging && clickDuration < CLICK_DELAY) {
+                    // Get the URL of the tile image
+                    const tileURL = `/tiles/${this.clickedTile.name}.png`;
+                    
+                    // Open the URL in a new window/tab
+                    window.open(tileURL, '_blank');
+                }
+                
+                // Reset click tracking
+                this.clickedTile = null;
             }, this);
 
             // Enable mouse wheel zoom
             this.input.on('wheel', function (pointer, gameObjects, deltaX, deltaY, deltaZ) {
-                const zoom = this.cameras.main.zoom;
+                const zoom = camera.zoom;
                 if (deltaY > 0) {
                     // Zoom out
-                    this.cameras.main.zoom = Math.max(controlConfig.minZoom, zoom - controlConfig.zoomSpeed);
+                    camera.zoom = Math.max(controlConfig.minZoom, zoom - controlConfig.zoomSpeed);
                 } else {
                     // Zoom in
-                    this.cameras.main.zoom = Math.min(controlConfig.maxZoom, zoom + controlConfig.zoomSpeed);
+                    camera.zoom = Math.min(controlConfig.maxZoom, zoom + controlConfig.zoomSpeed);
                 }
             }, this);
 
             // Add instructions text
-            this.add.text(10, 10, 'Arrow Keys: Move | Q/E: Zoom | Mouse Drag: Pan | Mouse Wheel: Zoom', {
+            this.add.text(10, 10, 'Arrow Keys: Move | Q/E: Zoom | Mouse Drag: Pan | Mouse Wheel: Zoom | Click: Open Tile', {
                 font: '16px Arial',
                 fill: '#000000',
                 backgroundColor: '#ffffff'
