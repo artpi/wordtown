@@ -1,0 +1,20 @@
+{
+	"name": "wordtown",
+	"version": "0.1.0",
+	"description": "A game where you build town by posting on your blog.",
+	"author": "Artpi",
+	"license": "GPL-2.0-or-later",
+	"main": "build/index.js",
+	"files": [
+		"wordtown.php"
+	],
+	"scripts": {
+		"format": "wp-scripts format",
+		"plugin-zip": "wp-scripts plugin-zip",
+		"wp-env": "wp-env"
+	},
+	"devDependencies": {
+		"@wordpress/env": "^9.2.0",
+		"@wordpress/scripts": "^30.7.0"
+	}
+}
