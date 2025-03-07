@@ -1,0 +1,1 @@
+sudo apk add --no-cache imagemagick imagemagick-dev libpng-dev

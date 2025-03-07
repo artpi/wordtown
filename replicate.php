@@ -6,6 +6,11 @@
  * @package WordTown
  */
 
+use Imagick;
+use Gmagick;
+use Exception;
+use WP_Error;
+
 class Replicate {
 	/**
 	 * Option name for storing the API key.
@@ -182,12 +187,6 @@ class Replicate {
 		$max_attempts = 30;
 		$attempt = 0;
 
-		// Parse the event according to SSE format
-		$event_parts = [
-			'event' => 'message', // Default event type
-			'data'  => '',
-			'id'    => null,
-		];
 		$status = 'pending';
 		while ( $attempt < $max_attempts && in_array( $status, ['starting', 'processing', 'pending'] ) ) {
 			sleep( 5 );
@@ -227,11 +226,13 @@ class Replicate {
 		require_once ABSPATH . 'wp-admin/includes/image.php';
 		
 		// Download the image from the URL
-		$temp_file = download_url( $image_url );
+		$downloaded = download_url( $image_url );
 		
-		if ( is_wp_error( $temp_file ) ) {
-			return $temp_file;
+		if ( is_wp_error( $downloaded ) ) {
+			return $downloaded;
 		}
+		$mask_path = __DIR__ . '/assets/mask.png';
+		$temp_file = $this->crop_image_with_mask( $downloaded, $mask_path );
 		
 		// Get the filename from the URL
 		$file_name = basename( parse_url( $image_url, PHP_URL_PATH ) );
@@ -267,4 +268,128 @@ class Replicate {
 		
 		return $media_id;
 	}
+
+	/**
+	 * Crop an image using a mask, making black parts of the mask transparent.
+	 *
+	 * This method will use either ImageMagick or GMagick, depending on what's available.
+	 * White parts of the mask will remain unchanged, while black parts will become transparent.
+	 *
+	 * @param string $image_path The file path of the image to crop.
+	 * @param string $mask_path  The file path of the mask image.
+	 * @return string|WP_Error   The path to the cropped image or WP_Error on failure.
+	 * @phpstan-ignore-next-line
+	 */
+	public function crop_image_with_mask( string $image_path, string $mask_path ): string|WP_Error {
+		// Check if the files exist
+		if ( ! file_exists( $image_path ) ) {
+			return new WP_Error( 'missing_image', __( 'The source image file does not exist.', 'wordtown' ) );
+		}
+
+		if ( ! file_exists( $mask_path ) ) {
+			return new WP_Error( 'missing_mask', __( 'The mask image file does not exist.', 'wordtown' ) );
+		}
+
+		// Create output filename
+		$path_info = pathinfo( $image_path );
+		$output_path = $path_info['dirname'] . '/' . $path_info['filename'] . '-masked.' . $path_info['extension'];
+
+		// Try to use Imagick if available
+		if ( extension_loaded( 'imagick' ) ) {
+			try {
+				// @phpstan-ignore-next-line
+				$image = new \Imagick( $image_path );
+				
+				// @phpstan-ignore-next-line
+				$mask = new \Imagick( $mask_path );
+				
+				// Convert mask to grayscale if it's not already
+				// @phpstan-ignore-next-line
+				if ( $mask->getImageColorspace() !== \Imagick::COLORSPACE_GRAY ) {
+					// @phpstan-ignore-next-line
+					$mask->transformImageColorspace( \Imagick::COLORSPACE_GRAY );
+				}
+				
+				// Resize mask to match the image dimensions if needed
+				if ( $mask->getImageWidth() !== $image->getImageWidth() || 
+					 $mask->getImageHeight() !== $image->getImageHeight() ) {
+					$mask->resizeImage(
+						$image->getImageWidth(),
+						$image->getImageHeight(),
+						// @phpstan-ignore-next-line
+						\Imagick::FILTER_LANCZOS,
+						1
+					);
+				}
+				
+				// Set the image's alpha channel based on the mask
+				// White in the mask (255) = opaque, Black (0) = transparent
+				// @phpstan-ignore-next-line
+				$image->compositeImage( $mask, \Imagick::COMPOSITE_COPYOPACITY, 0, 0 );
+				
+				// Save the result
+				$image->writeImage( $output_path );
+				
+				// Clean up
+				$image->clear();
+				$mask->clear();
+				
+				return $output_path;
+			} catch ( Exception $e ) {
+				return new WP_Error( 'imagick_error', $e->getMessage() );
+			}
+		} 
+		// Try to use Gmagick if available
+		elseif ( extension_loaded( 'gmagick' ) ) {
+			try {
+				// @phpstan-ignore-next-line
+				$image = new \Gmagick( $image_path );
+				
+				// @phpstan-ignore-next-line
+				$mask = new \Gmagick( $mask_path );
+				
+				// Convert mask to grayscale if needed
+				// @phpstan-ignore-next-line
+				if ( $mask->getimagecolorspace() !== \Gmagick::COLORSPACE_GRAY ) {
+					// @phpstan-ignore-next-line
+					$mask->setimagetype( \Gmagick::IMGTYPE_GRAYSCALE );
+				}
+				
+				// Resize mask to match the image dimensions if needed
+				if ( $mask->getimagewidth() !== $image->getimagewidth() || 
+					 $mask->getimageheight() !== $image->getimageheight() ) {
+					$mask->resizeimage(
+						$image->getimagewidth(),
+						$image->getimageheight(),
+						// @phpstan-ignore-next-line
+						\Gmagick::FILTER_LANCZOS,
+						1
+					);
+				}
+				
+				// Set the image's alpha channel based on the mask
+				// @phpstan-ignore-next-line
+				$image->compositeimage( $mask, \Gmagick::COMPOSITE_COPYOPACITY, 0, 0 );
+				
+				// Save the result
+				$image->writeimage( $output_path );
+				
+				// Clean up
+				$image->destroy();
+				$mask->destroy();
+				
+				return $output_path;
+			} catch ( Exception $e ) {
+				return new WP_Error( 'gmagick_error', $e->getMessage() );
+			}
+		} 
+		// If neither extension is available, return an error
+		else {
+			return new WP_Error(
+				'missing_image_library',
+				__( 'Neither ImageMagick nor GMagick is available on this system.', 'wordtown' )
+			);
+		}
+	}
+
 }
