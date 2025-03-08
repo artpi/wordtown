@@ -247,6 +247,12 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 
 			\WP_CLI::success( sprintf( 'Image successfully cropped. Output saved to: %s', $result ) );
 		}
+
+		public function text_completion( $args, $assoc_args ) {
+			$replicate = new Replicate();
+			$result = $replicate->text_completion( "What is the capitol of france?" );
+			\WP_CLI::log( print_r( $result, true ) );
+		}
 	}
 
 	\WP_CLI::add_command( 'wordtown', 'WordTown_CLI' );

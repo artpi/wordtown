@@ -6,11 +6,6 @@
  * @package WordTown
  */
 
-use Imagick;
-use Gmagick;
-use Exception;
-use WP_Error;
-
 class Replicate {
 	/**
 	 * Option name for storing the API key.
@@ -145,7 +140,7 @@ class Replicate {
 	 */
 	public function create_prediction( string $model_version, array $input, array $media_data = [] ) {
 		$api_key = $this->get_api_key();
-		$output_images = [];
+
 		if ( empty( $api_key ) ) {
 			return new WP_Error( 'missing_api_key', __( 'Replicate API key is not set.', 'wordtown' ) );
 		}
@@ -153,21 +148,15 @@ class Replicate {
 		// Prepare the request data
 		$request_data = [
 			'version' => $model_version,
-			'stream'  => true,
+			'stream'  => false,
 			'input'   => $input,			
 		];
 
 		// Make the initial prediction request
-		$response = wp_remote_post(
+		$response = $this->make_api_request(
 			'https://api.replicate.com/v1/predictions',
-			[
-				'headers' => [
-					'Authorization' => 'Bearer ' . $api_key,
-					'Content-Type'  => 'application/json',
-				],
-				'body'    => wp_json_encode( $request_data ),
-				'timeout' => 30,
-			]
+			'POST',
+			$request_data
 		);
 
 		if ( is_wp_error( $response ) ) {
@@ -190,15 +179,8 @@ class Replicate {
 		$status = 'pending';
 		while ( $attempt < $max_attempts && in_array( $status, ['starting', 'processing', 'pending'] ) ) {
 			sleep( 5 );
-			$polling_response = wp_remote_get(
-				$stream_url,
-				[
-					'headers' => [
-						'Authorization' => 'Bearer ' . $api_key,
-						'Content-Type'  => 'application/json',
-					],
-				]
-			);
+			$polling_response = $this->make_api_request( $stream_url, 'GET' );
+			
 			if ( is_wp_error( $polling_response ) ) {
 				return $polling_response;
 			}
@@ -210,7 +192,57 @@ class Replicate {
 		if ( $status === 'succeeded' && is_array( $body->output ) ) {
 			return array_map( [ $this, 'upload_image' ], $body->output );
 		}
+	}
 
+	/**
+	 * Make a request to the Replicate API.
+	 *
+	 * @param string $url    The API endpoint URL.
+	 * @param string $method The HTTP method (GET or POST).
+	 * @param array  $data   Optional. The data to send with the request. Default empty array.
+	 * @param int    $timeout Optional. Request timeout in seconds. Default 30.
+	 * @param bool   $wait Optional. Whether to wait for the response. Default false.
+	 * @return array|WP_Error The response or WP_Error on failure.
+	 */
+	private function make_api_request( string $url, string $method = 'GET', array $data = [], int $timeout = 30, bool $wait = false ) {
+		$api_key = $this->get_api_key();
+		
+		$args = [
+			'headers' => [
+				'Authorization' => 'Bearer ' . $api_key,
+				'Content-Type'  => 'application/json',
+			],
+			'timeout' => $timeout,
+		];
+
+		if ( $wait ) {
+			$args['headers']['Prefer'] = 'wait=' . $timeout;
+		}
+		
+		if ( ! empty( $data ) && $method === 'POST' ) {
+			$args['body'] = wp_json_encode( $data );
+		}
+		
+		if ( $method === 'GET' ) {
+			return wp_remote_get( $url, $args );
+		} else {
+			return wp_remote_post( $url, $args );
+		}
+	}
+
+	public function text_completion( $user_prompt, $system_prompt = 'You are a helpful assistant.' ) {
+		$response = $this->make_api_request( 'https://api.replicate.com/v1/models/meta/meta-llama-3-70b-instruct/predictions', 'POST', [
+			'input' => [
+				'prompt' => $user_prompt,
+				'system_prompt' => $system_prompt,
+			],
+			'stream' => false,
+		], 60, true );
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		return trim( join( "", json_decode( wp_remote_retrieve_body( $response ) )->output ) );
 	}
 
 	/**
