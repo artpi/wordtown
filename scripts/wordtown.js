@@ -245,13 +245,15 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 	tileContainer.dataset.tileKey = tileKey;
 	tileContainer.dataset.tileUrl = tileUrl;
 	
-	// Create image element
-	const imgElement = document.createElement('img');
-	imgElement.src = tileUrl;
-	imgElement.alt = tileKey;
-	imgElement.style.width = '100%';
-	imgElement.style.height = '100%';
-	imgElement.style.objectFit = 'contain';
+	// Create tile content div with background image instead of img element
+	const tileContent = document.createElement('div');
+	tileContent.className = 'wordtown-tile-content';
+	tileContent.style.width = '100%';
+	tileContent.style.height = '100%';
+	tileContent.style.backgroundImage = `url('${tileUrl}')`;
+	tileContent.style.backgroundSize = 'contain';
+	tileContent.style.backgroundPosition = 'center';
+	tileContent.style.backgroundRepeat = 'no-repeat';
 	
 	// Add loading indicator
 	const loadingIndicator = document.createElement('div');
@@ -266,14 +268,19 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 	loadingIndicator.style.justifyContent = 'center';
 	loadingIndicator.textContent = 'Loading...';
 	
+	// Create a hidden image to detect when the image is loaded
+	const hiddenImg = new Image();
+	hiddenImg.style.display = 'none';
+	hiddenImg.src = tileUrl;
+	
 	// Handle image load
-	imgElement.onload = () => {
+	hiddenImg.onload = () => {
 		loadingIndicator.style.display = 'none';
 		console.log(`Tile ${tileKey} loaded successfully`);
 	};
 	
 	// Handle image error
-	imgElement.onerror = () => {
+	hiddenImg.onerror = () => {
 		loadingIndicator.textContent = 'Error';
 		loadingIndicator.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
 		console.error(`Error loading tile ${tileKey}`);
@@ -307,15 +314,16 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 	});
 	
 	// Add click handler
-	tileContainer.addEventListener('click', () => {
-		if (!isDragging) {
-			window.open(tileUrl, '_blank');
-		}
-	});
+	// tileContainer.addEventListener('click', () => {
+	// 	if (!isDragging) {
+	// 		window.open(tileUrl, '_blank');
+	// 	}
+	// });
 	
 	// Add elements to the DOM
-	tileContainer.appendChild(imgElement);
+	tileContainer.appendChild(tileContent);
 	tileContainer.appendChild(loadingIndicator);
+	tileContainer.appendChild(hiddenImg); // Add hidden image for load detection
 	gridContainer.appendChild(tileContainer);
 	
 	// Store reference to the tile
@@ -326,6 +334,20 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 		tileKey: tileKey,
 		tileUrl: tileUrl
 	});
+}
+
+function initializePanning() {
+	const container = document.querySelector('.wordtown-container');
+	if (!container) return;
+
+	// Make all images non-draggable
+	const images = container.querySelectorAll('img');
+	images.forEach(img => {
+		img.draggable = false;
+		img.style.userSelect = 'none';
+	});
+
+	// ... existing panning code ...
 }
 
 // Initialize when the DOM is ready

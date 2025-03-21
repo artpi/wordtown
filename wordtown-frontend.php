@@ -14,6 +14,14 @@
         canvas {
             display: block;
         }
+        .wordtown-container img {
+            -webkit-user-drag: none;
+            user-select: none;
+            -moz-user-select: none;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            pointer-events: none; /* This prevents all mouse events on the image */
+        }
     </style>
 	<?php wp_head(); ?>
 </head>
