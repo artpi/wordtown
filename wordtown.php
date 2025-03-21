@@ -653,6 +653,7 @@ function wordtown_get_tiles( \WP_REST_Request $request ): \WP_REST_Response {
 			if ( ! empty( $tile_id ) ) {
 				$tile_image = wp_get_attachment_url( $tile_id );
 				
+				for ( $i = 0; $i < 100; $i++ ) {
 				$tiles[] = array(
 					'post_id'    => $post_id,
 					'post_title' => get_the_title(),
@@ -660,6 +661,7 @@ function wordtown_get_tiles( \WP_REST_Request $request ): \WP_REST_Response {
 					'tile_id'    => (int) $tile_id,
 					'tile_url'   => $tile_image ? $tile_image : '',
 				);
+			}
 			}
 		}
 		wp_reset_postdata();
