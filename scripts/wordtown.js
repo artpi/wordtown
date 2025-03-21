@@ -222,7 +222,7 @@ function fetchTiles(gridContainer, loadingElement, container) {
 			
 			// Calculate grid dimensions for a more square-like layout
 			const tileCount = tiles.length;
-			const gridSize = Math.ceil(Math.sqrt(tileCount)); // Square root for square layout
+			const gridSize = Math.ceil(1.5 * Math.cbrt(tileCount)); // Cube root for 3D layout
 			
 			// Place tiles in a square-like grid layout
 			tiles.forEach((tile, index) => {
