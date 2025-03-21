@@ -71,7 +71,7 @@ function initWordTown() {
 	const gridContainer = document.createElement('div');
 	gridContainer.id = 'wordtown-grid';
 	gridContainer.style.position = 'absolute';
-	gridContainer.style.transformOrigin = 'center center';
+	gridContainer.style.transformOrigin = 'top left';
 	gridContainer.style.transform = `scale(${currentZoom})`;
 	// We'll set the size and position after tiles are loaded
 	container.appendChild(gridContainer);
@@ -242,6 +242,9 @@ function fetchTiles(gridContainer, loadingElement, container) {
 			// Calculate grid bounds after all tiles are placed
 			calculateGridBounds();
 			
+			// Calculate initial zoom to fit all tiles
+			calculateInitialZoom(container, gridContainer);
+			
 			// Set initial grid size and position
 			updateGridSize(gridContainer);
 			
@@ -409,6 +412,34 @@ function calculateGridBounds() {
 	
 	gridBounds.maxX += paddingRight;
 	gridBounds.maxY += paddingBottom;
+}
+
+/**
+ * Calculate the initial zoom level to fit all tiles in the viewport
+ */
+function calculateInitialZoom(container, gridContainer) {
+	// Get container dimensions
+	const containerWidth = container.clientWidth;
+	const containerHeight = container.clientHeight;
+	
+	// Get grid dimensions
+	const gridWidth = gridBounds.maxX - gridBounds.minX;
+	const gridHeight = gridBounds.maxY - gridBounds.minY;
+	
+	// Calculate zoom level that would fit the entire grid
+	const zoomX = containerWidth / gridWidth;
+	const zoomY = containerHeight / gridHeight;
+	
+	// Use the smaller value to ensure the entire grid fits
+	const fitZoom = Math.min(zoomX, zoomY) * 1.8;
+	
+	// Set the initial zoom between min and max constraints
+	currentZoom = Math.max(config.minZoom, Math.min(config.maxZoom, fitZoom));
+	
+	// Update the grid container's transform
+	gridContainer.style.transform = `scale(${currentZoom})`;
+	
+	console.log(`Initial zoom set to ${currentZoom} (container: ${containerWidth}x${containerHeight}, grid: ${gridWidth}x${gridHeight})`);
 }
 
 /**
