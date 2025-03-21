@@ -9,6 +9,8 @@
 const config = {
 	tileWidth: 1024,          // Width of each tile in pixels
 	tileHeight: 512,         // Height of each tile in pixels (half of width for isometric)
+	tileMarginX: 100,
+	tileMarginY: 50,
 	gridSize: 4,             // Grid size (4x4)
 	zoomSpeed: 0.1,          // Zoom speed for mouse wheel
 	minZoom: 0.1,            // Minimum zoom level
@@ -199,10 +201,14 @@ function fetchTiles(gridContainer, loadingElement) {
 				return;
 			}
 			
-			// Place tiles
+			// Calculate grid dimensions based on number of tiles
+			const tileCount = tiles.length;
+			const gridWidth = Math.ceil(Math.sqrt(tileCount * 2)); // Make grid wider than tall for better screen filling
+			
+			// Place tiles in a grid layout
 			tiles.forEach((tile, index) => {
-				const gridX = (index % 3) + 1;
-				const gridY = Math.floor(index / 3) + 1;
+				const gridX = index % gridWidth;
+				const gridY = Math.floor(index / gridWidth);
 				const tileUrl = tile.url || tile.tile_url || tile.image_url;
 				const tileKey = `tile${index}`;
 				
@@ -213,6 +219,9 @@ function fetchTiles(gridContainer, loadingElement) {
 				
 				createTile(gridContainer, gridX, gridY, tileKey, tileUrl);
 			});
+			
+			// Center the grid after all tiles are placed
+			centerGrid(gridContainer);
 			
 			// Hide loading indicator when done
 			loadingElement.style.display = 'none';
@@ -228,9 +237,19 @@ function fetchTiles(gridContainer, loadingElement) {
  * Create a tile at the specified grid position
  */
 function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
-	// Calculate isometric position
-	const screenX = (gridX - gridY) * (config.tileWidth / 2 - 100);
-	const screenY = (gridX + gridY) * (config.tileHeight / 2 - 50);
+	// Calculate isometric position with proper spacing
+	// Offset every second row by half a tile width
+	const isOddRow = gridY % 2 === 1;
+	// Use smaller spacing to make tiles closer together
+	const tileSpacingX = config.tileWidth - config.tileMarginX * 2;
+	const tileSpacingY = ( config.tileHeight - config.tileMarginY * 2 ) / 2;
+		
+	const rowOffset = isOddRow ? tileSpacingX / 2 : 0;
+	
+
+	// Position tiles in a staggered grid pattern
+	const screenX = gridX * tileSpacingX + rowOffset;
+	const screenY = gridY * tileSpacingY;
 	
 	// Create tile container
 	const tileContainer = document.createElement('div');
@@ -297,14 +316,14 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 		
 		// Position the name above the tile
 		const rect = tileContainer.getBoundingClientRect();
-		tileNameElement.style.left = `${rect.left + rect.width/2 - tileNameElement.offsetWidth/2}px`;
-		tileNameElement.style.top = `${rect.top - 30}px`;
+		tileNameElement.style.left = `${rect.left + rect.width/2 - 100}px`;
+		tileNameElement.style.top = `${rect.top - 50}px`;
 	});
 	
 	tileContainer.addEventListener('mousemove', (e) => {
 		// Update name position to follow cursor
-		tileNameElement.style.left = `${e.clientX - tileNameElement.offsetWidth/2}px`;
-		tileNameElement.style.top = `${e.clientY - 30}px`;
+		tileNameElement.style.left = `${e.clientX - 100}px`;
+		tileNameElement.style.top = `${e.clientY - 50}px`;
 	});
 	
 	tileContainer.addEventListener('mouseout', () => {
@@ -334,6 +353,33 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 		tileKey: tileKey,
 		tileUrl: tileUrl
 	});
+}
+
+/**
+ * Center the grid after all tiles are placed
+ */
+function centerGrid(gridContainer) {
+	// Find the bounds of all placed tiles
+	let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+	
+	htmlTiles.forEach(tile => {
+		const rect = tile.element.getBoundingClientRect();
+		minX = Math.min(minX, rect.left);
+		maxX = Math.max(maxX, rect.right);
+		minY = Math.min(minY, rect.top);
+		maxY = Math.max(maxY, rect.bottom);
+	});
+	
+	// Calculate the center of the grid
+	const gridWidth = maxX - minX;
+	const gridHeight = maxY - minY;
+	
+	// Adjust the initial offset to center the grid
+	offsetX = -gridWidth / 4;
+	offsetY = -gridHeight / 4;
+	
+	// Update grid position
+	updateGridPosition(gridContainer);
 }
 
 function initializePanning() {
