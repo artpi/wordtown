@@ -15,19 +15,21 @@ const config = {
 	zoomSpeed: 0.1,          // Zoom speed for mouse wheel
 	minZoom: 0.1,            // Minimum zoom level
 	maxZoom: 2,              // Maximum zoom level
-	panSpeed: 1,             // Pan speed for keyboard/mouse
-	dragThreshold: 5         // Pixels of movement to consider as dragging
+	scrollbarWidth: 12,      // Width of scrollbars
+	scrollbarColor: 'rgba(0, 0, 0, 0.5)',  // Color of scrollbars
+	scrollbarTrackColor: 'rgba(0, 0, 0, 0.1)'  // Color of scrollbar track
 };
 
 // State variables
 let currentZoom = 1;
-let offsetX = 0;
-let offsetY = 0;
-let isDragging = false;
-let lastMouseX = 0;
-let lastMouseY = 0;
 let htmlTiles = [];
 let tileNameElement = null;
+let gridBounds = {
+	minX: 0,
+	maxX: 0,
+	minY: 0,
+	maxY: 0
+};
 
 /**
  * Initialize the grid and controls
@@ -39,24 +41,44 @@ function initWordTown() {
 	container.style.position = 'relative';
 	container.style.width = '100%';
 	container.style.height = '100vh';
-	container.style.overflow = 'hidden';
+	container.style.overflow = 'auto';  // Changed from 'hidden' to 'auto' to show scrollbars
 	container.style.backgroundColor = '#00ff00';
 	container.style.userSelect = 'none';
+	
+	// Add custom scrollbar styling
+	container.style.scrollbarWidth = 'thin';
+	container.style.scrollbarColor = `${config.scrollbarColor} ${config.scrollbarTrackColor}`;
+	
+	// For Webkit browsers (Chrome, Safari)
+	const scrollbarStyle = document.createElement('style');
+	scrollbarStyle.textContent = `
+		#wordtown-container::-webkit-scrollbar {
+			width: ${config.scrollbarWidth}px;
+			height: ${config.scrollbarWidth}px;
+		}
+		#wordtown-container::-webkit-scrollbar-track {
+			background: ${config.scrollbarTrackColor};
+		}
+		#wordtown-container::-webkit-scrollbar-thumb {
+			background-color: ${config.scrollbarColor};
+			border-radius: ${config.scrollbarWidth/2}px;
+		}
+	`;
+	document.head.appendChild(scrollbarStyle);
 	document.body.appendChild(container);
 	
-	// Create grid container (for centering and transforms)
+	// Create grid container
 	const gridContainer = document.createElement('div');
 	gridContainer.id = 'wordtown-grid';
 	gridContainer.style.position = 'absolute';
-	gridContainer.style.top = '50%';
-	gridContainer.style.left = '50%';
-	gridContainer.style.transform = 'translate(-50%, -50%) scale(1)';
 	gridContainer.style.transformOrigin = 'center center';
+	gridContainer.style.transform = `scale(${currentZoom})`;
+	// We'll set the size and position after tiles are loaded
 	container.appendChild(gridContainer);
 	
 	// Create tile name display element
 	tileNameElement = document.createElement('div');
-	tileNameElement.style.position = 'absolute';
+	tileNameElement.style.position = 'fixed'; // Changed from 'absolute' to 'fixed'
 	tileNameElement.style.padding = '5px 10px';
 	tileNameElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
 	tileNameElement.style.color = 'white';
@@ -70,7 +92,7 @@ function initWordTown() {
 	
 	// Add instructions
 	const instructions = document.createElement('div');
-	instructions.style.position = 'absolute';
+	instructions.style.position = 'fixed'; // Changed from 'absolute' to 'fixed'
 	instructions.style.top = '10px';
 	instructions.style.left = '10px';
 	instructions.style.padding = '5px 10px';
@@ -79,13 +101,13 @@ function initWordTown() {
 	instructions.style.fontFamily = 'Arial, sans-serif';
 	instructions.style.fontSize = '14px';
 	instructions.style.zIndex = '1000';
-	instructions.textContent = 'Arrow Keys: Move | Mouse Wheel: Zoom | Mouse Drag: Pan | Click: Open Tile';
+	instructions.textContent = 'Scroll to navigate | Mouse Wheel + Ctrl: Zoom | Click: Open Tile';
 	container.appendChild(instructions);
 	
 	// Add loading indicator
 	const loadingElement = document.createElement('div');
 	loadingElement.id = 'wordtown-loading';
-	loadingElement.style.position = 'absolute';
+	loadingElement.style.position = 'fixed'; // Changed from 'absolute' to 'fixed'
 	loadingElement.style.top = '50%';
 	loadingElement.style.left = '50%';
 	loadingElement.style.transform = 'translate(-50%, -50%)';
@@ -103,95 +125,92 @@ function initWordTown() {
 	setupEventListeners(container, gridContainer);
 	
 	// Fetch and place tiles
-	fetchTiles(gridContainer, loadingElement);
+	fetchTiles(gridContainer, loadingElement, container);
 }
 
 /**
  * Set up event listeners for controls
  */
 function setupEventListeners(container, gridContainer) {
-	// Keyboard controls
-	document.addEventListener('keydown', (e) => {
-		switch (e.key) {
-			case 'ArrowUp':
-				offsetY += config.panSpeed * 10;
-				updateGridPosition(gridContainer);
-				break;
-			case 'ArrowDown':
-				offsetY -= config.panSpeed * 10;
-				updateGridPosition(gridContainer);
-				break;
-			case 'ArrowLeft':
-				offsetX += config.panSpeed * 10;
-				updateGridPosition(gridContainer);
-				break;
-			case 'ArrowRight':
-				offsetX -= config.panSpeed * 10;
-				updateGridPosition(gridContainer);
-				break;
-		}
-	});
-	
-	// Mouse wheel zoom
+	// Mouse wheel zoom (only when Ctrl key is pressed)
 	container.addEventListener('wheel', (e) => {
-		e.preventDefault();
-		
-		// Calculate zoom change
-		const zoomDelta = e.deltaY > 0 ? -config.zoomSpeed : config.zoomSpeed;
-		const newZoom = Math.max(config.minZoom, Math.min(config.maxZoom, currentZoom + zoomDelta));
-		
-		// Apply zoom
-		if (newZoom !== currentZoom) {
-			currentZoom = newZoom;
-			gridContainer.style.transform = `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px)) scale(${currentZoom})`;
+		// Only zoom when Ctrl key is pressed, otherwise let native scrolling work
+		if (e.ctrlKey) {
+			e.preventDefault();
+			
+			// Calculate zoom change
+			const zoomDelta = e.deltaY > 0 ? -config.zoomSpeed : config.zoomSpeed;
+			
+			// Calculate the minimum zoom level needed to fit all tiles
+			const containerWidth = container.clientWidth;
+			const containerHeight = container.clientHeight;
+			const gridWidth = gridBounds.maxX - gridBounds.minX;
+			const gridHeight = gridBounds.maxY - gridBounds.minY;
+			
+			// Calculate zoom level that would fit the entire grid exactly
+			const fitZoomWidth = containerWidth / gridWidth;
+			const fitZoomHeight = containerHeight / gridHeight;
+			const fitZoom = Math.min(fitZoomWidth, fitZoomHeight);
+			
+			// Use the exact fit zoom as minimum (no margin)
+			const effectiveMinZoom = Math.max(config.minZoom, fitZoom);
+			
+			const newZoom = Math.max(effectiveMinZoom, Math.min(config.maxZoom, currentZoom + zoomDelta));
+			
+			// Apply zoom
+			if (newZoom !== currentZoom) {
+				// Get current scroll position and viewport dimensions
+				const scrollLeft = container.scrollLeft;
+				const scrollTop = container.scrollTop;
+				
+				// Calculate the point we're zooming around (mouse position)
+				const zoomX = e.clientX + scrollLeft - container.offsetLeft;
+				const zoomY = e.clientY + scrollTop - container.offsetTop;
+				
+				// Calculate new scroll position to keep the point under mouse
+				const scaleFactor = newZoom / currentZoom;
+				const newScrollLeft = zoomX * scaleFactor - containerWidth / 2;
+				const newScrollTop = zoomY * scaleFactor - containerHeight / 2;
+				
+				// Apply new zoom
+				currentZoom = newZoom;
+				gridContainer.style.transform = `scale(${currentZoom})`;
+				
+				// Update grid size based on zoom
+				updateGridSize(gridContainer);
+				
+				// Adjust scroll position
+				container.scrollTo(newScrollLeft, newScrollTop);
+			}
 		}
 	});
 	
-	// Mouse drag
-	container.addEventListener('mousedown', (e) => {
-		isDragging = true;
-		lastMouseX = e.clientX;
-		lastMouseY = e.clientY;
-		container.style.cursor = 'grabbing';
-	});
-	
-	container.addEventListener('mousemove', (e) => {
-		if (isDragging) {
-			const deltaX = e.clientX - lastMouseX;
-			const deltaY = e.clientY - lastMouseY;
-			
-			offsetX += deltaX;
-			offsetY += deltaY;
-			
-			updateGridPosition(gridContainer);
-			
-			lastMouseX = e.clientX;
-			lastMouseY = e.clientY;
+	// Prevent default zoom behavior on Ctrl+wheel
+	document.addEventListener('keydown', (e) => {
+		if (e.ctrlKey && e.key === '+' || e.key === '-') {
+			e.preventDefault();
 		}
-	});
-	
-	container.addEventListener('mouseup', () => {
-		isDragging = false;
-		container.style.cursor = 'default';
-	});
-	
-	container.addEventListener('mouseleave', () => {
-		isDragging = false;
-		container.style.cursor = 'default';
 	});
 }
 
 /**
- * Update the grid position based on current offset and zoom
+ * Update the grid size based on tile positions and current zoom
  */
-function updateGridPosition(gridContainer) {
-	gridContainer.style.transform = `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px)) scale(${currentZoom})`;
+function updateGridSize(gridContainer) {
+	// Set the grid container size based on the bounds and zoom
+	const width = (gridBounds.maxX - gridBounds.minX) * currentZoom;
+	const height = (gridBounds.maxY - gridBounds.minY) * currentZoom;
+	
+	gridContainer.style.width = `${width}px`;
+	gridContainer.style.height = `${height}px`;
+	gridContainer.style.left = `0px`; // Start at left edge
+	gridContainer.style.top = `0px`;  // Start at top edge
 }
 
 /**
  * Fetch tiles from WordPress API
  */
-function fetchTiles(gridContainer, loadingElement) {
+function fetchTiles(gridContainer, loadingElement, container) {
 	wp.apiFetch({ path: 'wordtown/v1/tiles' })
 		.then(tiles => {
 			console.log('API response:', tiles);
@@ -201,14 +220,14 @@ function fetchTiles(gridContainer, loadingElement) {
 				return;
 			}
 			
-			// Calculate grid dimensions based on number of tiles
+			// Calculate grid dimensions for a more square-like layout
 			const tileCount = tiles.length;
-			const gridWidth = Math.ceil(Math.sqrt(tileCount * 2)); // Make grid wider than tall for better screen filling
+			const gridSize = Math.ceil(Math.sqrt(tileCount)); // Square root for square layout
 			
-			// Place tiles in a grid layout
+			// Place tiles in a square-like grid layout
 			tiles.forEach((tile, index) => {
-				const gridX = index % gridWidth;
-				const gridY = Math.floor(index / gridWidth);
+				const gridX = index % gridSize;
+				const gridY = Math.floor(index / gridSize);
 				const tileUrl = tile.url || tile.tile_url || tile.image_url;
 				const tileKey = `tile${index}`;
 				
@@ -220,8 +239,14 @@ function fetchTiles(gridContainer, loadingElement) {
 				createTile(gridContainer, gridX, gridY, tileKey, tileUrl);
 			});
 			
-			// Center the grid after all tiles are placed
-			centerGrid(gridContainer);
+			// Calculate grid bounds after all tiles are placed
+			calculateGridBounds();
+			
+			// Set initial grid size and position
+			updateGridSize(gridContainer);
+			
+			// Center the view on the grid
+			centerView(container);
 			
 			// Hide loading indicator when done
 			loadingElement.style.display = 'none';
@@ -246,10 +271,10 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 		
 	const rowOffset = isOddRow ? tileSpacingX / 2 : 0;
 	
-
 	// Position tiles in a staggered grid pattern
-	const screenX = gridX * tileSpacingX + rowOffset;
-	const screenY = gridY * tileSpacingY;
+	// Add half tile width/height to ensure tiles start fully visible
+	const screenX = gridX * tileSpacingX + rowOffset + config.tileWidth/2;
+	const screenY = gridY * tileSpacingY + config.tileHeight/2;
 	
 	// Create tile container
 	const tileContainer = document.createElement('div');
@@ -306,7 +331,7 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 	};
 	
 	// Add hover effects
-	tileContainer.addEventListener('mouseover', () => {
+	tileContainer.addEventListener('mouseover', (e) => {
 		tileContainer.style.transform = 'translate(-50%, -50%) scale(1.05)';
 		tileContainer.style.zIndex = '10';
 		
@@ -314,10 +339,9 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 		tileNameElement.textContent = tileKey;
 		tileNameElement.style.display = 'block';
 		
-		// Position the name above the tile
-		const rect = tileContainer.getBoundingClientRect();
-		tileNameElement.style.left = `${rect.left + rect.width/2 - 100}px`;
-		tileNameElement.style.top = `${rect.top - 50}px`;
+		// Position the name near the cursor
+		tileNameElement.style.left = `${e.clientX - 100}px`;
+		tileNameElement.style.top = `${e.clientY - 50}px`;
 	});
 	
 	tileContainer.addEventListener('mousemove', (e) => {
@@ -332,13 +356,6 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 		tileNameElement.style.display = 'none';
 	});
 	
-	// Add click handler
-	// tileContainer.addEventListener('click', () => {
-	// 	if (!isDragging) {
-	// 		window.open(tileUrl, '_blank');
-	// 	}
-	// });
-	
 	// Add elements to the DOM
 	tileContainer.appendChild(tileContent);
 	tileContainer.appendChild(loadingIndicator);
@@ -351,49 +368,64 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 		gridX: gridX,
 		gridY: gridY,
 		tileKey: tileKey,
-		tileUrl: tileUrl
+		tileUrl: tileUrl,
+		screenX: screenX,
+		screenY: screenY
 	});
 }
 
 /**
- * Center the grid after all tiles are placed
+ * Calculate the bounds of the grid based on all tiles
  */
-function centerGrid(gridContainer) {
-	// Find the bounds of all placed tiles
-	let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+function calculateGridBounds() {
+	// Initialize with extreme values
+	gridBounds = {
+		minX: Infinity,
+		maxX: -Infinity,
+		minY: Infinity,
+		maxY: -Infinity
+	};
 	
+	// Find the bounds of all placed tiles
 	htmlTiles.forEach(tile => {
-		const rect = tile.element.getBoundingClientRect();
-		minX = Math.min(minX, rect.left);
-		maxX = Math.max(maxX, rect.right);
-		minY = Math.min(minY, rect.top);
-		maxY = Math.max(maxY, rect.bottom);
+		const left = tile.screenX - config.tileWidth/2;
+		const right = tile.screenX + config.tileWidth/2;
+		const top = tile.screenY - config.tileHeight/2;
+		const bottom = tile.screenY + config.tileHeight/2;
+		
+		gridBounds.minX = Math.min(gridBounds.minX, left);
+		gridBounds.maxX = Math.max(gridBounds.maxX, right);
+		gridBounds.minY = Math.min(gridBounds.minY, top);
+		gridBounds.maxY = Math.max(gridBounds.maxY, bottom);
 	});
 	
-	// Calculate the center of the grid
-	const gridWidth = maxX - minX;
-	const gridHeight = maxY - minY;
+	// No negative padding - ensure grid starts at 0,0 to make all tiles visible
+	gridBounds.minX = 0;
+	gridBounds.minY = 0;
 	
-	// Adjust the initial offset to center the grid
-	offsetX = -gridWidth / 4;
-	offsetY = -gridHeight / 4;
+	// Add padding only to the right and bottom
+	const paddingRight = 100;
+	const paddingBottom = 100;
 	
-	// Update grid position
-	updateGridPosition(gridContainer);
+	gridBounds.maxX += paddingRight;
+	gridBounds.maxY += paddingBottom;
 }
 
-function initializePanning() {
-	const container = document.querySelector('.wordtown-container');
-	if (!container) return;
-
-	// Make all images non-draggable
-	const images = container.querySelectorAll('img');
-	images.forEach(img => {
-		img.draggable = false;
-		img.style.userSelect = 'none';
-	});
-
-	// ... existing panning code ...
+/**
+ * Center the view on the grid
+ */
+function centerView(container) {
+	// Calculate the center of the grid
+	const gridWidth = gridBounds.maxX - gridBounds.minX;
+	const gridHeight = gridBounds.maxY - gridBounds.minY;
+	
+	// Calculate the scroll position to center the grid
+	const scrollLeft = (gridBounds.minX + gridWidth/2) * currentZoom - container.clientWidth/2;
+	const scrollTop = (gridBounds.minY + gridHeight/2) * currentZoom - container.clientHeight/2;
+	
+	// Set the scroll position
+	container.scrollLeft = scrollLeft;
+	container.scrollTop = scrollTop;
 }
 
 // Initialize when the DOM is ready
