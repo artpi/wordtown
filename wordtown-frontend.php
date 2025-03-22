@@ -20,6 +20,34 @@
             -ms-user-select: none;
             pointer-events: none; /* This prevents all mouse events on the image */
         }
+
+		.wordtown-post-info {
+			position: absolute;
+			top: 140px;
+			left: 330px;
+			color: white;
+			z-index: 500;
+			width: 328px;
+			height: 196px;
+			margin: auto;
+			border-radius: 50px;
+			color: transparent;
+			padding: 16px;
+			overflow: hidden;
+		}
+		.wordtown-post-info h4 {
+			margin-top: 0;
+			margin-bottom: 8px;
+		}
+		.wordtown-post-info .wordtown-post-title {
+			font-size: 32px;
+			text-align: center;
+		}
+		.wordtown-post-info.wordtown-post-info-hover {
+			background-color: rgba(0, 0, 0, 0.41);
+			color: white;
+			font-size: 24px;
+		}
     </style>
 	<?php wp_head(); ?>
 </head>

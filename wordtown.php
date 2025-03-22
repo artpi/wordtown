@@ -437,6 +437,8 @@ function wordtown_get_tiles( \WP_REST_Request $request ): \WP_REST_Response {
 					'post_date'  => get_the_date( 'c' ),
 					'tile_id'    => (int) $tile_id,
 					'tile_url'   => $tile_image ? $tile_image : '',
+					'post_url'   => get_the_permalink(),
+					'post_excerpt' => get_the_excerpt(),
 				);
 			//}
 			}

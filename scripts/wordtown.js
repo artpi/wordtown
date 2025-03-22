@@ -23,7 +23,6 @@ const config = {
 // State variables
 let currentZoom = 1;
 let htmlTiles = [];
-let tileNameElement = null;
 let gridBounds = {
 	minX: 0,
 	maxX: 0,
@@ -76,19 +75,6 @@ function initWordTown() {
 	// We'll set the size and position after tiles are loaded
 	container.appendChild(gridContainer);
 	
-	// Create tile name display element
-	tileNameElement = document.createElement('div');
-	tileNameElement.style.position = 'fixed'; // Changed from 'absolute' to 'fixed'
-	tileNameElement.style.padding = '5px 10px';
-	tileNameElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-	tileNameElement.style.color = 'white';
-	tileNameElement.style.borderRadius = '4px';
-	tileNameElement.style.fontFamily = 'Arial, sans-serif';
-	tileNameElement.style.fontSize = '16px';
-	tileNameElement.style.pointerEvents = 'none';
-	tileNameElement.style.zIndex = '1000';
-	tileNameElement.style.display = 'none';
-	container.appendChild(tileNameElement);
 	
 	// Add instructions
 	const instructions = document.createElement('div');
@@ -229,14 +215,13 @@ function fetchTiles(gridContainer, loadingElement, container) {
 				const gridX = index % gridSize;
 				const gridY = Math.floor(index / gridSize);
 				const tileUrl = tile.url || tile.tile_url || tile.image_url;
-				const tileKey = `tile${index}`;
 				
 				if (!tileUrl || typeof tileUrl !== 'string' || !tileUrl.match(/^https?:\/\//)) {
 					console.error('Invalid tile URL:', tileUrl);
 					return;
 				}
 				
-				createTile(gridContainer, gridX, gridY, tileKey, tileUrl);
+				createTile(gridContainer, gridX, gridY, index, tile);
 			});
 			
 			// Calculate grid bounds after all tiles are placed
@@ -264,7 +249,9 @@ function fetchTiles(gridContainer, loadingElement, container) {
 /**
  * Create a tile at the specified grid position
  */
-function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
+function createTile(gridContainer, gridX, gridY, index, tile) {
+	const tileKey = `tile${index}`;
+	const tileUrl = tile.url || tile.tile_url || tile.image_url;
 	// Calculate isometric position with proper spacing
 	// Offset every second row by half a tile width
 	const isOddRow = gridY % 2 === 1;
@@ -332,33 +319,27 @@ function createTile(gridContainer, gridX, gridY, tileKey, tileUrl) {
 		loadingIndicator.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
 		console.error(`Error loading tile ${tileKey}`);
 	};
-	
-	// Add hover effects
-	tileContainer.addEventListener('mouseover', (e) => {
+
+	const postInfo = document.createElement('div');
+	postInfo.className = 'wordtown-post-info';
+	postInfo.innerHTML = `<h4 class="wordtown-post-title">${tile.post_title}</h4><p>${tile.post_excerpt}</p>`;
+	tileContainer.appendChild(postInfo);
+
+	postInfo.addEventListener('mouseover', (e) => {
 		tileContainer.style.transform = 'translate(-50%, -50%) scale(1.05)';
 		tileContainer.style.zIndex = '10';
-		
-		// Show tile name
-		tileNameElement.textContent = tileKey;
-		tileNameElement.style.display = 'block';
-		
-		// Position the name near the cursor
-		tileNameElement.style.left = `${e.clientX - 100}px`;
-		tileNameElement.style.top = `${e.clientY - 50}px`;
+		postInfo.classList.add('wordtown-post-info-hover');
 	});
-	
-	tileContainer.addEventListener('mousemove', (e) => {
-		// Update name position to follow cursor
-		tileNameElement.style.left = `${e.clientX - 100}px`;
-		tileNameElement.style.top = `${e.clientY - 50}px`;
-	});
-	
-	tileContainer.addEventListener('mouseout', () => {
+	postInfo.addEventListener('mouseout', () => {
 		tileContainer.style.transform = 'translate(-50%, -50%)';
 		tileContainer.style.zIndex = '1';
-		tileNameElement.style.display = 'none';
+		postInfo.classList.remove('wordtown-post-info-hover');
+	});
+	postInfo.addEventListener('click', (e) => {
+		window.location.href = tile.post_url;
 	});
 	
+
 	// Add elements to the DOM
 	tileContainer.appendChild(tileContent);
 	tileContainer.appendChild(loadingIndicator);
