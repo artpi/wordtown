@@ -58,7 +58,7 @@ const WordTownSidebar = () => {
 			});
 	}, [postId, tileId]);
 
-	// Render the tile or appropriate message
+	// Render the tile content panel
 	const renderTileContent = () => {
 		if (isLoading) {
 			return createElement('div', { className: 'wordtown-loading' },
@@ -70,19 +70,6 @@ const WordTownSidebar = () => {
 		if (error) {
 			return createElement('div', { className: 'wordtown-error' },
 				createElement('p', {}, error)
-			);
-		}
-
-		if (!tileId) {
-			return createElement('div', { className: 'wordtown-no-tile' },
-				createElement('p', {}, 'No tile has been generated for this post yet.'),
-				createElement(Button, {
-					isPrimary: true,
-					onClick: () => {
-						// This would need a custom endpoint to trigger tile generation
-						alert('Tile generation would be triggered here. Currently this feature requires WP-CLI.');
-					}
-				}, 'Generate Tile')
 			);
 		}
 
@@ -107,6 +94,28 @@ const WordTownSidebar = () => {
 		);
 	};
 
+	// Render the tile generation panel
+	const renderGenerationPanel = () => {
+		return createElement('div', { className: 'wordtown-generation-panel' },
+			tileId 
+				? createElement(Button, {
+					isPrimary: true,
+					onClick: () => {
+						alert('Tile regeneration would be triggered here. Currently this feature requires WP-CLI.');
+					}
+				}, 'Regenerate Tile')
+				: createElement(Button, {
+					isPrimary: true,
+					onClick: () => {
+						alert('Tile generation would be triggered here. Currently this feature requires WP-CLI.');
+					}
+				}, 'Generate Tile'),
+			createElement('p', { className: 'wordtown-generation-note', style: { marginTop: '10px', fontSize: '12px' } },
+				'Note: Tile generation may take a few minutes to complete.'
+			)
+		);
+	};
+
 	return createElement(
 		PluginSidebar,
 		{
@@ -114,10 +123,17 @@ const WordTownSidebar = () => {
 			icon: 'building',
 			title: 'WordTown',
 		},
+		// Only show the tile panel if a tile exists
+		tileId && createElement(
+			PanelBody,
+			{ title: 'Current Isometric Tile', initialOpen: true },
+			renderTileContent()
+		),
+		// Always show the generation panel
 		createElement(
 			PanelBody,
-			{ title: 'Isometric Tile', initialOpen: true },
-			renderTileContent()
+			{ title: 'Tile Generation', initialOpen: true },
+			renderGenerationPanel()
 		)
 	);
 };
