@@ -697,3 +697,42 @@ add_action('enqueue_block_editor_assets', function () {
         true
     );
 });
+
+/**
+ * Register post meta for REST API access.
+ */
+add_action('init', 'wordtown_register_post_meta');
+
+/**
+ * Register the wordtown_tile post meta field for REST API access.
+ *
+ * @return void
+ */
+function wordtown_register_post_meta(): void {
+	register_post_meta(
+		'post',
+		'wordtown_tile',
+		[
+			'show_in_rest'  => true,
+			'single'        => true,
+			'type'          => 'integer',
+			'auth_callback' => function() {
+				return current_user_can('edit_posts');
+			}
+		]
+	);
+	
+	// Also register the prompt meta if you want to access it directly
+	register_post_meta(
+		'post',
+		'wordtown_tile_prompt',
+		[
+			'show_in_rest'  => true,
+			'single'        => true,
+			'type'          => 'string',
+			'auth_callback' => function() {
+				return current_user_can('edit_posts');
+			}
+		]
+	);
+}
