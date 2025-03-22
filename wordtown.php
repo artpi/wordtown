@@ -3,7 +3,7 @@
 /**
  * Plugin Name:     WordTown
  * Description:     A game where you build town by posting on your blog.
- * Version:         0.5.0
+ * Version:         0.5.1
  * Author:          Artur Piszek (artpi)
  * Author URI:      https://piszek.com
  * License:         GPL-2.0-or-later
