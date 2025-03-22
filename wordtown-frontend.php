@@ -21,6 +21,10 @@
             pointer-events: none; /* This prevents all mouse events on the image */
         }
 
+		#wordtown-container, .wordtown-grid {
+			background-image: url('<?php echo plugin_dir_url( __FILE__ ) . 'assets/bg.png'; ?>');
+			background-size: 10%;
+		}
 		.wordtown-post-info {
 			position: absolute;
 			top: 140px;

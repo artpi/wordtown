@@ -41,7 +41,6 @@ function initWordTown() {
 	container.style.width = '100%';
 	container.style.height = '100vh';
 	container.style.overflow = 'auto';  // Changed from 'hidden' to 'auto' to show scrollbars
-	container.style.backgroundColor = '#00ff00';
 	container.style.userSelect = 'none';
 	
 	// Add custom scrollbar styling
