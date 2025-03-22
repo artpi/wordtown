@@ -6,7 +6,11 @@
 	"license": "GPL-2.0-or-later",
 	"main": "build/index.js",
 	"files": [
-		"wordtown.php"
+		"wordtown.php",
+		"replicate.php",
+		"wordtown-frontend.php",
+		"scripts",
+		"assets/mask.png"
 	],
 	"scripts": {
 		"format": "wp-scripts format",

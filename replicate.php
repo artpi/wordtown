@@ -196,7 +196,12 @@ class Replicate {
 
 		if ( in_array( $body->status, ['starting', 'processing', 'pending' ] ) ) {
 			error_log( 'Replicate: Polling for prediction ' . print_r( $body, true ) );
-			wp_schedule_single_event( time() + 30, 'replicate_prediction', [ $body->urls->get, $remaining_attempts - 1, $meta, false ] );
+			if ( isset( $meta['blocking'] ) && $meta['blocking'] === true ) {
+				sleep( 15 );
+				do_action( 'replicate_prediction', $body->urls->get, $remaining_attempts - 1, $meta, false );
+			} else {
+				wp_schedule_single_event( time() + 30, 'replicate_prediction', [ $body->urls->get, $remaining_attempts - 1, $meta, false ] );
+			}
 		}
 	}
 
