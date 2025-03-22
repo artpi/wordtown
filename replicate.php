@@ -21,6 +21,7 @@ class Replicate {
 		// Add admin menu and settings.
 		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'replicate_prediction', array( $this, 'handle_prediction' ), 10, 4 );
 	}
 
 	/**
@@ -138,7 +139,7 @@ class Replicate {
 	 * @param array  $media_data    Optional. Data for the media attachment. Default empty array.
 	 * @return int|WP_Error         The attachment ID on success, WP_Error on failure.
 	 */
-	public function create_prediction( string $model_version, array $input, array $media_data = [] ) {
+	public function create_prediction( string $model_version, array $input, array $meta = [] ) {
 		$api_key = $this->get_api_key();
 
 		if ( empty( $api_key ) ) {
@@ -169,28 +170,33 @@ class Replicate {
 			return new WP_Error( 'invalid_response', __( 'Invalid response from Replicate API.', 'wordtown' ) );
 		}
 
-		// Get the stream URL
-		$stream_url = $body->urls->get;
-		
-		// Poll the stream until we get the output
-		$max_attempts = 30;
-		$attempt = 0;
+		do_action( 'replicate_prediction', $body->urls->get, 5, $meta, $body );
+	}
 
-		$status = 'pending';
-		while ( $attempt < $max_attempts && in_array( $status, ['starting', 'processing', 'pending'] ) ) {
-			sleep( 5 );
-			$polling_response = $this->make_api_request( $stream_url, 'GET' );
-			
-			if ( is_wp_error( $polling_response ) ) {
-				return $polling_response;
-			}
-			$body = json_decode( wp_remote_retrieve_body( $polling_response ) );
-			$status = $body->status;
-			$attempt++;
+	public function handle_prediction( $url, $remaining_attempts = 5, $meta = [], $body = false ) {
+		if ( $remaining_attempts <= 0 ) {
+			error_log( 'WordTown tile generation error: Prediction timed out. ' . print_r( $url, true ) );
+			return;
 		}
 
-		if ( $status === 'succeeded' && is_array( $body->output ) ) {
-			return array_map( [ $this, 'upload_image' ], $body->output );
+		if ( ! $body ) {
+			$newbody = $this->make_api_request( $url, 'GET' );
+			if ( is_wp_error( $newbody ) ) {
+				error_log( 'WordTown tile generation error: ' . print_r( $newbody, true ) );
+				return;
+			}
+			$body = json_decode( wp_remote_retrieve_body( $newbody ) );
+		}
+
+		if ( $body->status === 'succeeded' && is_array( $body->output ) ) {
+			$uploads = array_map( [ $this, 'upload_image' ], $body->output );
+			do_action( 'replicate_prediction_uploaded', $uploads, $meta );
+			return;
+		}
+
+		if ( in_array( $body->status, ['starting', 'processing', 'pending' ] ) ) {
+			error_log( 'Replicate: Polling for prediction ' . print_r( $body, true ) );
+			wp_schedule_single_event( time() + 30, 'replicate_prediction', [ $body->urls->get, $remaining_attempts - 1, $meta, false ] );
 		}
 	}
 

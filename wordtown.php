@@ -14,10 +14,7 @@
  */
 
 // Include the Replicate class.
-require_once plugin_dir_path( __FILE__ ) . 'replicate.php';
-
-// Initialize the Replicate class.
-// $replicate = new Replicate();
+$replicate = false;
 
 /**
  * Register WP-Cron job for generating isometric tiles.
@@ -30,11 +27,14 @@ add_action( 'init', 'wordtown_register_cron_job' );
  * @return void
  */
 function wordtown_register_cron_job(): void {
+	global $replicate;
 	// Add a hook for single post processing
 	add_action( 'wordtown_generate_tile_for_post', 'wordtown_generate_tile_for_post' );
 	
 	// Add hook for post publishing
 	add_action( 'transition_post_status', 'wordtown_schedule_tile_on_publish', 10, 3 );
+	require_once plugin_dir_path( __FILE__ ) . 'replicate.php';
+	$replicate = new Replicate();
 }
 
 /**
@@ -106,6 +106,7 @@ function wordtown_schedule_tile_on_publish( string $new_status, string $old_stat
  * @return void
  */
 function wordtown_generate_tile_for_post( int $post_id ): void {
+	global $replicate;
 	// Check if the post already has a tile
 	$existing_tile = get_post_meta( $post_id, 'wordtown_tile', true );
 	if ( ! empty( $existing_tile ) ) {
@@ -134,7 +135,6 @@ function wordtown_generate_tile_for_post( int $post_id ): void {
 	$categories_str = implode( ', ', $categories );
 
 	// Initialize Replicate
-	$replicate = new Replicate();
 
 	// Create a prompt for the isometric tile
 	$system_prompt = 'You are a creative assistant that creates prompts for generating isometric game tiles. Create a detailed prompt for an isometric tile that represents the content of a blog post. The prompt should describe a building or structure in an isometric game style.';
@@ -178,30 +178,11 @@ function wordtown_generate_tile_for_post( int $post_id ): void {
 		'post_title'  => sprintf( 'WordTown Tile for: %s', $title ),
 		'post_status' => 'private',
 	];
-
+	update_post_meta( $post_id, 'wordtown_tile_prompt', $enhanced_prompt );
 	// Run the prediction
-	$result = $replicate->create_prediction( $model_version, $input, $media_data );
-
-	if ( is_wp_error( $result ) ) {
-		// Log error and exit
-		error_log( 'WordTown tile generation error: ' . $result->get_error_message() );
-		return;
-	}
-
-	// The result should be an array of media IDs
-	if ( is_array( $result ) && ! empty( $result ) ) {
-		// Use the first media ID
-		$media_id = $result[0];
-		
-		// Update post meta with the media ID
-		update_post_meta( $post_id, 'wordtown_tile', $media_id );
-		
-		// Also store the prompt used to generate the tile
-		update_post_meta( $post_id, 'wordtown_tile_prompt', $enhanced_prompt );
-
-		// Clean up the job ID
-		delete_post_meta( $post_id, 'wordtown_tile_scheduled' );
-	}
+	$replicate->create_prediction( $model_version, $input, [
+		'post_id' => $post_id,
+	] );
 }
 
 /**
@@ -520,6 +501,23 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
  * Register REST API endpoints.
  */
 add_action( 'rest_api_init', 'wordtown_register_rest_routes' );
+
+add_action( 'replicate_prediction_uploaded', 'wordtown_handle_prediction', 10, 2 );
+
+function wordtown_handle_prediction( $result, $meta ) {
+
+	error_log( 'Replicate: Prediction uploaded ' . print_r( [$meta, $result], true ) );
+	if ( is_array( $result ) && ! empty( $result ) ) {
+		// Use the first media ID
+		$media_id = $result[0];
+		
+		// Update post meta with the media ID
+		update_post_meta( $meta['post_id'], 'wordtown_tile', $media_id );
+
+		// Clean up the job ID
+		delete_post_meta( $meta['post_id'], 'wordtown_tile_scheduled' );
+	}
+}
 
 /**
  * Register the REST API routes for WordTown.
