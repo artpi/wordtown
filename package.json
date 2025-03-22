@@ -10,7 +10,9 @@
 		"replicate.php",
 		"wordtown-frontend.php",
 		"scripts",
-		"assets/mask.png"
+		"assets/mask.png",
+		"assets/tiletree.png",
+		"assets/bg.png"
 	],
 	"scripts": {
 		"format": "wp-scripts format",
