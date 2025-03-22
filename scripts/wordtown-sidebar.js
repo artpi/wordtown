@@ -2,16 +2,18 @@ const { registerPlugin } = wp.plugins;
 const { PluginSidebar } = wp.editPost;
 const { PanelBody, Spinner, Button } = wp.components;
 const { createElement, useState, useEffect } = wp.element;
-const { useSelect } = wp.data;
+const { useSelect, useDispatch } = wp.data;
 const apiFetch = wp.apiFetch;
 
 const WordTownSidebar = () => {
 	const [tileData, setTileData] = useState(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState(null);
+	const [isGenerating, setIsGenerating] = useState(false);
+	const [generationStatus, setGenerationStatus] = useState(null);
 
 	// Get the current post ID and meta data using wp.data
-	const { postId, tileId, prompt } = useSelect(select => {
+	const { postId, tileId, prompt, scheduled } = useSelect(select => {
 		const editor = select('core/editor');
 		const postId = editor.getCurrentPostId();
 		const meta = editor.getEditedPostAttribute('meta') || {};
@@ -20,8 +22,10 @@ const WordTownSidebar = () => {
 			postId,
 			tileId: meta.wordtown_tile || null,
 			prompt: meta.wordtown_tile_prompt || null,
+			scheduled: meta.wordtown_tile_scheduled || null,
 		};
 	}, []);
+
 
 	// Fetch the media data when the component mounts or tileId changes
 	useEffect(() => {
@@ -57,6 +61,34 @@ const WordTownSidebar = () => {
 				setIsLoading(false);
 			});
 	}, [postId, tileId]);
+
+	// Function to handle tile generation
+	const generateTile = () => {
+		if (!postId || isGenerating) return;
+
+		setIsGenerating(true);
+		setGenerationStatus('Requesting tile generation...');
+
+		apiFetch({
+			path: `/wordtown/v1/posts/${postId}/generate`,
+			method: 'POST',
+		})
+			.then(response => {
+				console.log('Tile generation response:', response);
+				if (response.success && response.wordtown_tile_scheduled) {
+					// Update the post meta with the scheduled job ID
+					setGenerationStatus(`Tile generation scheduled (Job ID: ${response.wordtown_tile_scheduled})`);
+				} else {
+					setGenerationStatus('Error: Unexpected response from server');
+					setIsGenerating(false);
+				}
+			})
+			.catch(err => {
+				console.error('Error generating tile:', err);
+				setGenerationStatus(`Error: ${err.message || 'Failed to schedule tile generation'}`);
+				setIsGenerating(false);
+			});
+	};
 
 	// Render the tile content panel
 	const renderTileContent = () => {
@@ -97,22 +129,31 @@ const WordTownSidebar = () => {
 	// Render the tile generation panel
 	const renderGenerationPanel = () => {
 		return createElement('div', { className: 'wordtown-generation-panel' },
-			tileId 
-				? createElement(Button, {
-					isPrimary: true,
-					onClick: () => {
-						alert('Tile regeneration would be triggered here. Currently this feature requires WP-CLI.');
-					}
-				}, 'Regenerate Tile')
-				: createElement(Button, {
-					isPrimary: true,
-					onClick: () => {
-						alert('Tile generation would be triggered here. Currently this feature requires WP-CLI.');
-					}
-				}, 'Generate Tile'),
-			createElement('p', { className: 'wordtown-generation-note', style: { marginTop: '10px', fontSize: '12px' } },
-				'Note: Tile generation may take a few minutes to complete.'
-			)
+			scheduled || generationStatus
+				? createElement('div', { className: 'wordtown-scheduled-info' },
+					createElement('p', {}, 'Tile generation scheduled:'),
+					createElement('p', { className: 'wordtown-scheduled-time' }, generationStatus || `Job ID: ${scheduled}`)
+				)
+				: (isGenerating
+					? createElement('div', { className: 'wordtown-generating' },
+						createElement(Spinner),
+						createElement('p', {}, 'Requesting tile generation...')
+					)
+					: (tileId 
+						? createElement(Button, {
+							isPrimary: true,
+							onClick: generateTile
+						}, 'Regenerate Tile')
+						: createElement(Button, {
+							isPrimary: true,
+							onClick: generateTile
+						}, 'Generate Tile')
+					)
+				),
+			!scheduled && !generationStatus && !isGenerating && createElement('p', { 
+				className: 'wordtown-generation-note', 
+				style: { marginTop: '10px', fontSize: '12px' } 
+			}, 'Note: Tile generation may take a few minutes to complete.')
 		);
 	};
 

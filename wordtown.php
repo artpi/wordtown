@@ -30,14 +30,6 @@ add_action( 'init', 'wordtown_register_cron_job' );
  * @return void
  */
 function wordtown_register_cron_job(): void {
-	// Register the cron event if it's not already scheduled
-	// if ( ! wp_next_scheduled( 'wordtown_generate_tile_event' ) ) {
-	// 	wp_schedule_event( time(), 'hourly', 'wordtown_generate_tile_event' );
-	// }
-
-	// Hook the function to the event
-	//add_action( 'wordtown_generate_tile_event', 'wordtown_process_posts_for_tiles' );
-
 	// Add a hook for single post processing
 	add_action( 'wordtown_generate_tile_for_post', 'wordtown_generate_tile_for_post' );
 	
@@ -66,7 +58,10 @@ function wordtown_schedule_tile_on_publish( string $new_status, string $old_stat
 	}
 	
 	// Schedule an immediate single event to generate a tile
-	wp_schedule_single_event( time() + 10, 'wordtown_generate_tile_for_post', array( $post->ID ) );
+	$job_id = wp_schedule_single_event( time() + 10, 'wordtown_generate_tile_for_post', array( $post->ID ) );
+	if ( ! $job_id ) {
+		return;
+	}
 	
 	// Add a post meta to indicate that tile generation has been scheduled
 	update_post_meta( $post->ID, 'wordtown_tile_scheduled', current_time( 'mysql' ) );
@@ -203,6 +198,9 @@ function wordtown_generate_tile_for_post( int $post_id ): void {
 		
 		// Also store the prompt used to generate the tile
 		update_post_meta( $post_id, 'wordtown_tile_prompt', $enhanced_prompt );
+
+		// Clean up the job ID
+		delete_post_meta( $post_id, 'wordtown_tile_scheduled' );
 	}
 }
 
@@ -576,6 +574,42 @@ function wordtown_register_rest_routes(): void {
 					'sanitize_callback' => 'sanitize_text_field',
 				),
 			),
+		)
+	);
+	register_rest_route(
+		'wordtown/v1',
+		'/posts/(?P<post_id>\d+)/generate',
+		array(
+			'methods'             => 'POST',
+			'callback'            => function( \WP_REST_Request $request ) {
+				$post_id = $request->get_param( 'post_id' );
+				$post = get_post( $post_id );
+				if ( ! $post ) {
+					return new \WP_REST_Response( 'Post not found', 404 );
+				}
+				if ( strlen( $post->post_content ) < 20 ) {
+					return new \WP_REST_Response( 'Post content is too short', 400 );
+				}
+				// Check if the post already has a tile
+				delete_post_meta( $post->ID, 'wordtown_tile' );
+				delete_post_meta( $post->ID, 'wordtown_tile_prompt' );	
+				delete_post_meta( $post->ID, 'wordtown_tile_scheduled' );
+				// Schedule an immediate single event to generate a tile
+				$job_id = wp_schedule_single_event( time() + 10, 'wordtown_generate_tile_for_post', array( $post->ID ) );
+				if ( ! $job_id ) {
+					return new \WP_REST_Response( 'Failed to schedule tile generation', 500 );
+				}
+				
+				// Add a post meta to indicate that tile generation has been scheduled
+				update_post_meta( $post->ID, 'wordtown_tile_scheduled', current_time( 'mysql' ) );
+				return [
+					'success' => true,
+					'wordtown_tile_scheduled' => current_time( 'mysql' ),
+				];
+			},
+			'permission_callback' => function() {
+				return current_user_can( 'edit_posts' );
+			},
 		)
 	);
 }
