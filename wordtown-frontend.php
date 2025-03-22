@@ -2,9 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Isometric Grid with Phaser</title>
-    <!-- Load Phaser from CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <title>WordTown of <?php echo get_bloginfo( 'name' ); ?></title>
     <style>
         body {
             margin: 0;

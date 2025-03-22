@@ -2,9 +2,6 @@ sudo apk add --no-cache imagemagick imagemagick-dev libpng-dev
 
 ## TODO
 
-- Show the image in the post sidebar, with ability to generate / trigger the job.
-- Split the job into 2 parts.
-- Test on Atomic
 - Add the post title to the tile
 - Clicking (dbl?)
 - Configuring the prompts
