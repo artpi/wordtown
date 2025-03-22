@@ -14,6 +14,14 @@ Alternatively, you can trigger tile generation manually from the sidebar in WP-A
 
 You will need Replicate API key to generate tiles, as it is using Flux inpainting to generate the tiles.
 
+## How to install
+
+1. Grab latest release from [releases page](https://github.com/artpi/wordtown/releases/latest)
+2. Download the wordtown.zip file
+3. Upload to your WordPress
+4. Configure the Replicate API key and other settings in `/wp-admin/options-general.php?page=wordtown-settings`
+5. Now you can trigger the job on your posts manually
+
 ### What happens when I publish a post?
 
 1. A WP-Cron job is triggered to generate a tile.
