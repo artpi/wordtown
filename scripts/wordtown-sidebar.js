@@ -11,14 +11,15 @@ const WordTownSidebar = () => {
 	const [error, setError] = useState(null);
 
 	// Get the current post ID and meta data using wp.data
-	const { postId, tileId } = useSelect(select => {
+	const { postId, tileId, prompt } = useSelect(select => {
 		const editor = select('core/editor');
 		const postId = editor.getCurrentPostId();
 		const meta = editor.getEditedPostAttribute('meta') || {};
 		
 		return {
 			postId,
-			tileId: meta.wordtown_tile || null
+			tileId: meta.wordtown_tile || null,
+			prompt: meta.wordtown_tile_prompt || null,
 		};
 	}, []);
 
@@ -46,7 +47,6 @@ const WordTownSidebar = () => {
 						id: media.id,
 						url: media.source_url,
 						title: media.title.rendered,
-						prompt: media.description.rendered || 'No prompt information available'
 					});
 				}
 				setIsLoading(false);
@@ -100,10 +100,10 @@ const WordTownSidebar = () => {
 				style: { maxWidth: '100%', height: 'auto' }
 			}),
 			createElement('h4', {}, 'Prompt Used:'),
-			createElement('div', {
+			prompt ? createElement('div', {
 				className: 'wordtown-prompt',
-				dangerouslySetInnerHTML: { __html: tileData.prompt }
-			})
+				dangerouslySetInnerHTML: { __html: prompt }
+			}) : null
 		);
 	};
 
