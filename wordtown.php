@@ -432,46 +432,6 @@ function wordtown_register_rest_routes(): void {
 			'methods'             => 'GET',
 			'callback'            => 'wordtown_get_tiles',
 			'permission_callback' => '__return_true', // Unauthenticated endpoint
-			'args'                => array(
-				'page'     => array(
-					'description'       => 'Current page of the collection.',
-					'type'              => 'integer',
-					'default'           => 1,
-					'sanitize_callback' => 'absint',
-				),
-				'per_page' => array(
-					'description'       => 'Maximum number of items to be returned in result set.',
-					'type'              => 'integer',
-					'default'           => 10,
-					'sanitize_callback' => 'absint',
-				),
-				'orderby'  => array(
-					'description'       => 'Sort collection by object attribute.',
-					'type'              => 'string',
-					'default'           => 'date',
-					'enum'              => array( 'date', 'title', 'id' ),
-					'sanitize_callback' => 'sanitize_text_field',
-				),
-				'order'    => array(
-					'description'       => 'Order sort attribute ascending or descending.',
-					'type'              => 'string',
-					'default'           => 'DESC',
-					'enum'              => array( 'ASC', 'DESC' ),
-					'sanitize_callback' => 'sanitize_text_field',
-				),
-				'after'    => array(
-					'description'       => 'Limit response to posts published after a given ISO8601 compliant date.',
-					'type'              => 'string',
-					'format'            => 'date-time',
-					'sanitize_callback' => 'sanitize_text_field',
-				),
-				'before'   => array(
-					'description'       => 'Limit response to posts published before a given ISO8601 compliant date.',
-					'type'              => 'string',
-					'format'            => 'date-time',
-					'sanitize_callback' => 'sanitize_text_field',
-				),
-			),
 		)
 	);
 	register_rest_route(
@@ -522,36 +482,10 @@ function wordtown_register_rest_routes(): void {
  * @return \WP_REST_Response The response object.
  */
 function wordtown_get_tiles( \WP_REST_Request $request ): \WP_REST_Response {
-	// Get pagination parameters
-	$per_page = isset( $request['per_page'] ) ? (int) $request['per_page'] : 10;
-	$page = isset( $request['page'] ) ? (int) $request['page'] : 1;
-
-	// Get sorting parameters
-	$orderby = isset( $request['orderby'] ) ? sanitize_text_field( $request['orderby'] ) : 'date';
-	$order = isset( $request['order'] ) ? strtoupper( sanitize_text_field( $request['order'] ) ) : 'DESC';
-
-	// Validate order and orderby
-	$valid_orderby = array( 'date', 'title', 'id' );
-	$valid_order = array( 'ASC', 'DESC' );
-
-	if ( ! in_array( $orderby, $valid_orderby, true ) ) {
-		$orderby = 'date';
-	}
-
-	if ( ! in_array( $order, $valid_order, true ) ) {
-		$order = 'DESC';
-	}
-
-	// Limit per_page to a reasonable number
-	$per_page = min( 100, max( 1, $per_page ) );
-
 	$args = array(
 		'post_type'      => 'post',
 		'post_status'    => 'publish',
-		'posts_per_page' => $per_page,
-		'paged'          => $page,
-		'orderby'        => $orderby,
-		'order'          => $order,
+		'posts_per_page' => -1,
 		'meta_query'     => array(
 			array(
 				'key'     => 'wordtown_tile',
@@ -559,21 +493,6 @@ function wordtown_get_tiles( \WP_REST_Request $request ): \WP_REST_Response {
 			),
 		),
 	);
-
-	// Add date filtering if provided
-	if ( isset( $request['after'] ) ) {
-		$args['date_query'][] = array(
-			'after'     => sanitize_text_field( $request['after'] ),
-			'inclusive' => true,
-		);
-	}
-
-	if ( isset( $request['before'] ) ) {
-		$args['date_query'][] = array(
-			'before'    => sanitize_text_field( $request['before'] ),
-			'inclusive' => true,
-		);
-	}
 
 	$query = new \WP_Query( $args );
 	$tiles = array();
@@ -603,14 +522,7 @@ function wordtown_get_tiles( \WP_REST_Request $request ): \WP_REST_Response {
 		}
 		wp_reset_postdata();
 	}
-
-	// Prepare pagination headers
-	$total_posts = $query->found_posts;
-	$total_pages = ceil( $total_posts / $per_page );
-
 	$response = new \WP_REST_Response( $tiles, 200 );
-	$response->header( 'X-WP-Total', $total_posts );
-	$response->header( 'X-WP-TotalPages', $total_pages );
 
 	return $response;
 }
